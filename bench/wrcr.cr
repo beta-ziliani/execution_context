@@ -3,6 +3,7 @@
 {% end %}
 require "http/client"
 require "option_parser"
+require "wait_group"
 
 address = "localhost:8080"
 duration = 30.seconds
@@ -42,38 +43,45 @@ else
   port = 80
 end
 
-start = Time.local
+successes = Array({UInt64, UInt64}).new(fibers, {0_u64, 0_u64})
 
-successes = Channel({UInt64, UInt64}).new(fibers)
+running = true
 
-fibers.times do
+wg = WaitGroup.new fibers
+
+fibers.times do |fiber_index|
   spawn do
-    j = 0_u64
+    count = 0_u64
     bytes = 0_u64
     client = HTTP::Client.new address, port
-    loop do
+    while running
       requests.times do
-        break if Time.local - start > duration
+        break unless running
         response = client.get "/"
         if response.status_code == 200
-          j += 1
+          count += 1
           bytes += response.body.size
         end
       rescue IO::TimeoutError
       rescue e
         STDERR.puts e
       end
-      break if Time.local - start > duration
     end
-    successes.send({j, bytes})
+    successes[fiber_index] = {count, bytes}
+    wg.done
   end
 end
+
+sleep duration
+running = false
+
+wg.wait
 
 total_successes = 0_u64
 total_bytes = 0_u64
 
-fibers.times do
-  reqs, bytes = successes.receive
+fibers.times do |i|
+  reqs, bytes = successes[i]
   total_successes += reqs
   total_bytes += bytes
 end
