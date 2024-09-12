@@ -44,12 +44,12 @@ end
 
 start = Time.local
 
-successes = Channel({Int32, Int64}).new(fibers)
+successes = Channel({UInt64, UInt64}).new(fibers)
 
 fibers.times do
   spawn do
-    j = 0
-    bytes = 0_i64
+    j = 0_u64
+    bytes = 0_u64
     client = HTTP::Client.new address, port
     loop do
       requests.times do
@@ -69,8 +69,8 @@ fibers.times do
   end
 end
 
-total_successes = 0
-total_bytes = 0_i64
+total_successes = 0_u64
+total_bytes = 0_u64
 
 fibers.times do
   reqs, bytes = successes.receive
